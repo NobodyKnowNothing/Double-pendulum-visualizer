@@ -68,4 +68,6 @@ The project allows you to visualize the motion of the double pendulum and compar
 - **Integration**:
     - C++ uses a fixed timestep `dt` derived from parameters (40s simulation, 1001 steps).
     - Python uses `lsoda` (via `odeint`) which is an adaptive step-size solver, providing a high-accuracy reference.
-    - The visualization script shows the C++ result overlaid with the Python simulation, revealing discrepancies in the behavior of the two simulations, resulting from the different integration methods, showing the limitations of fixed timestep integration.
+- **Visualization**:
+    - The visualization script shows the C++ result overlaid with the Python simulation revealing discrepancies in the behavior of the two simulations
+    - Resulting from the different integration methods, this shows the limitations of fixed timestep integration.
