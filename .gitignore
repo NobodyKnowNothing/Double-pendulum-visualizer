@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+
+# C++ compiled files
+*.exe
+*.o
+*.out
+
+# Data files (artifacts)
+pendulum.csv
+*.gif
