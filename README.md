@@ -61,6 +61,7 @@ The project allows you to visualize the motion of the double pendulum and compar
    - **Red Loop/Line**: C++ Simulation (RK4 Custom Implementation)
    - **Cyan Dashed Line**: Python Simulation (SciPy Reference Implementation)
    - **Yellow Trace**: Path history of the second pendulum bob (from C++ data)
+   - **Blue Trace**: Path history of the second pendulum bob (from Python data)
 
 ## Implementation Details
 
@@ -69,5 +70,5 @@ The project allows you to visualize the motion of the double pendulum and compar
     - C++ uses a fixed timestep `dt` derived from parameters (40s simulation, 1001 steps).
     - Python uses `lsoda` (via `odeint`) which is an adaptive step-size solver, providing a high-accuracy reference.
 - **Visualization**:
-    - The visualization script shows the C++ result overlaid with the Python simulation revealing discrepancies in the behavior of the two simulations
-    - Resulting from the different integration methods, this shows the limitations of fixed timestep integration.
+    - The visualization script shows the C++ result overlaid with the Python simulation revealing discrepancies in the behavior of the two simulations.
+    - This shows the differences in the limitations of fixed timestep integration vs adaptive step-size solvers.

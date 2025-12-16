@@ -69,18 +69,24 @@ def visualize():
     time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, color='white')
     ax.legend(loc='upper right')
     
-    # Trace logic (optional, adds a trail) - Let's just trace C++ for clarity or both?
-    # Let's trace C++ in yellow as before
-    trace, = ax.plot([], [], 'y-', lw=1, alpha=0.5)
-    trace_x, trace_y = [], []
+    # Trace logic (Trails)
+    # C++ Trace (Yellow)
+    trace_cpp, = ax.plot([], [], 'y-', lw=1, alpha=0.5, label='C++ Trace')
+    trace_cpp_x, trace_cpp_y = [], []
+    
+    # Python Trace (Blue)
+    trace_py_line, = ax.plot([], [], 'b-', lw=1, alpha=0.5, label='Python Trace')
+    trace_py_x, trace_py_y = [], []
+    
     max_trace_len = 100
 
     def init():
         ln_cpp.set_data([], [])
         ln_py.set_data([], [])
-        trace.set_data([], [])
+        trace_cpp.set_data([], [])
+        trace_py_line.set_data([], [])
         time_text.set_text('')
-        return ln_cpp, ln_py, trace, time_text
+        return ln_cpp, ln_py, trace_cpp, trace_py_line, time_text
 
     def animate(i):
         # Handle different lengths if necessary (though they should be same 1001)
@@ -99,15 +105,23 @@ def visualize():
         ln_py.set_data(py_x, py_y)
 
         # Update trace (C++ trace)
-        trace_x.append(x2_cpp[idx_cpp])
-        trace_y.append(y2_cpp[idx_cpp])
-        if len(trace_x) > max_trace_len:
-            trace_x.pop(0)
-            trace_y.pop(0)
-        trace.set_data(trace_x, trace_y)
+        trace_cpp_x.append(x2_cpp[idx_cpp])
+        trace_cpp_y.append(y2_cpp[idx_cpp])
+        if len(trace_cpp_x) > max_trace_len:
+            trace_cpp_x.pop(0)
+            trace_cpp_y.pop(0)
+        trace_cpp.set_data(trace_cpp_x, trace_cpp_y)
+
+        # Update trace (Python trace)
+        trace_py_x.append(x2_py[idx_py])
+        trace_py_y.append(y2_py[idx_py])
+        if len(trace_py_x) > max_trace_len:
+            trace_py_x.pop(0)
+            trace_py_y.pop(0)
+        trace_py_line.set_data(trace_py_x, trace_py_y)
 
         time_text.set_text(f'Time: {t_cpp[idx_cpp]:.2f}s')
-        return ln_cpp, ln_py, trace, time_text
+        return ln_cpp, ln_py, trace_cpp, trace_py_line, time_text
 
     # Create animation
     # Interval roughly matches real time if possible, but depends on dt
