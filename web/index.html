@@ -37,6 +37,12 @@
             // creating 'pendulum.csv' in the C++ virtual memory.
 
             // 3. Read the file from C++ memory
+            console.log("Module:", module);
+            if (!module.FS) {
+                console.error("Module.FS is undefined!");
+                status.innerText = "Error: Module.FS is undefined";
+                return;
+            }
             const csvContent = module.FS.readFile('pendulum.csv', { encoding: 'utf8' });
 
             // 4. Send this data to PyScript's Python environment
