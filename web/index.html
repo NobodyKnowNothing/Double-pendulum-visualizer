@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Double Pendulum: C++ vs Python (Wasm)</title>
+
+    <link rel="stylesheet" href="https://pyscript.net/releases/2023.05.1/pyscript.css" />
+    <script defer src="https://pyscript.net/releases/2023.05.1/pyscript.js"></script>
+
+    <script src="cpp_solver.js"></script>
+</head>
+
+<body style="background-color: #111; color: white; font-family: sans-serif; padding: 20px;">
+
+    <h1>Double Pendulum Simulation</h1>
+    <p>
+        Red: C++ (Runge-Kutta 4) | Cyan: Python (SciPy odeint)
+    </p>
+    <div id="status">Status: Loading Python & C++...</div>
+
+    <div id="plot-div"></div>
+
+    <py-config>
+        packages = ["numpy", "sympy", "scipy", "matplotlib", "pandas"]
+    </py-config>
+
+    <script>
+        async function runCppAndTransferFile() {
+            const status = document.getElementById("status");
+            status.innerText = "Status: Running C++ Simulation...";
+
+            // 1. Initialize C++ Wasm
+            const module = await createCppSolver();
+
+            // 2. The main() in C++ runs automatically upon init in this config, 
+            // creating 'pendulum.csv' in the C++ virtual memory.
+
+            // 3. Read the file from C++ memory
+            const csvContent = module.FS.readFile('pendulum.csv', { encoding: 'utf8' });
+
+            // 4. Send this data to PyScript's Python environment
+            // We use the pyscript interpreter API to write to Python's virtual FS
+            // Note: PyScript initialization timing can be tricky. We'll let Python call a JS function to get data.
+            window.cppData = csvContent;
+
+            status.innerText = "Status: C++ Done. Solving Python Equations (SymPy takes a moment)...";
+        }
+
+        // Run immediately
+        runCppAndTransferFile();
+    </script>
+    <py-script src="./main.py"></py-script>
+</body>
+
+</html>
