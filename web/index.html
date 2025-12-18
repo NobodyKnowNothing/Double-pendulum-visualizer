@@ -15,46 +15,62 @@
 
     <h1>Double Pendulum Simulation</h1>
     <p>
-        Red: C++ (Runge-Kutta 4) | Cyan: Python (SciPy odeint)
+        Red: Naive Runge-Kutta 4 (C++) | Cyan: Adaptive-Step LSODA (Python, SciPy) | Magenta: Adaptive-Step RK4 (C++)
     </p>
     <div id="status">Status: Loading Python & C++...</div>
+    <button id="reset-btn" onclick="resetSimulation()"
+        style="padding: 10px 20px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
+        Restart Simulation
+    </button>
 
     <div id="plot-div"></div>
 
     <py-config>
-        packages = ["numpy", "sympy", "scipy", "matplotlib", "pandas"]
+        packages = ["numpy", "scipy", "matplotlib", "sympy"]
     </py-config>
 
     <script>
-        async function runCppAndTransferFile() {
+        let cppModule = null;
+
+        async function resetSimulation() {
             const status = document.getElementById("status");
-            status.innerText = "Status: Running C++ Simulation...";
+            const btn = document.getElementById("reset-btn");
+            btn.disabled = true;
+            status.innerText = "Status: Resetting...";
 
-            // 1. Initialize C++ Wasm
-            const module = await createCppSolver();
+            // Clear data so Python waits
+            delete window.cppData;
+            delete window.cppDataAdaptive;
 
-            // 2. The main() in C++ runs automatically upon init in this config, 
-            // creating 'pendulum.csv' in the C++ virtual memory.
+            // Re-run C++ Simulation
+            if (!cppModule) {
+                cppModule = await createCppSolver();
+            } else {
+                // If module exists, call the main function exported by Emscripten
+                cppModule._main();
+            }
 
-            // 3. Read the file from C++ memory
-            console.log("Module:", module);
-            if (!module.FS) {
+            // Read the file from C++ memory
+            console.log("Module:", cppModule);
+            if (!cppModule.FS) {
                 console.error("Module.FS is undefined!");
                 status.innerText = "Error: Module.FS is undefined";
+                btn.disabled = false;
                 return;
             }
-            const csvContent = module.FS.readFile('pendulum.csv', { encoding: 'utf8' });
+            const csvContent = cppModule.FS.readFile('pendulum.csv', { encoding: 'utf8' });
+            const csvAdaptiveContent = cppModule.FS.readFile('adaptive_step_size_pendulum.csv', { encoding: 'utf8' });
 
-            // 4. Send this data to PyScript's Python environment
-            // We use the pyscript interpreter API to write to Python's virtual FS
-            // Note: PyScript initialization timing can be tricky. We'll let Python call a JS function to get data.
+            // Send this data to PyScript's Python environment
             window.cppData = csvContent;
+            window.cppDataAdaptive = csvAdaptiveContent;
 
-            status.innerText = "Status: C++ Done. Solving Python Equations (SymPy takes a moment)...";
+            status.innerText = "Status: C++ Done. Python taking over...";
+            btn.disabled = false;
         }
 
-        // Run immediately
-        runCppAndTransferFile();
+        // Run immediately on load
+        resetSimulation();
     </script>
     <py-script src="./main.py"></py-script>
 </body>
