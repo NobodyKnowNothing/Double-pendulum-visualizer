@@ -15,10 +15,13 @@
 
     <h1>Double Pendulum Simulation</h1>
     <p>
-        Red: Naive Runge-Kutta 4 (C++) | Cyan: Adaptive-Step LSODA (Python, SciPy) | Magenta: Adaptive-Step RK4 (C++)
+        Red: Naive Runge-Kutta 4 (C++) | Cyan: Adaptive-Step LSODA (Python, SciPy) | Magenta: Adaptive-Step Runge-Kutta
+        4 (C++)
     </p>
     <div id="status">Status: Loading Python & C++...</div>
-
+    <button py-click="reset_simulation" id="reset-btn" style="padding: 10px 20px; cursor: pointer;">
+        Reset Simulation
+    </button>
     <div id="plot-div"></div>
 
     <py-config>
@@ -26,12 +29,24 @@
     </py-config>
 
     <script>
+        let module;
         async function runCppAndTransferFile() {
             const status = document.getElementById("status");
+
+            // Clear old data so Python knows to wait for the new simulation
+            delete window.cppData;
+            delete window.cppDataAdaptive;
+
+            if (!module) {
+                module = await createCppSolver();
+            } else {
+                module._main(); // Re-run C++ main
+            }
+
             status.innerText = "Status: Running C++ Simulation...";
 
             // 1. Initialize C++ Wasm
-            const module = await createCppSolver();
+            // const module = await createCppSolver();
 
             // 2. The main() in C++ runs automatically upon init in this config, 
             // creating 'pendulum.csv' in the C++ virtual memory.
