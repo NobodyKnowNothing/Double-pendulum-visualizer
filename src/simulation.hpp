@@ -7,6 +7,7 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <boost/numeric/odeint.hpp>
 
 // Simulation parameters
 const double g = 9.81;
@@ -21,13 +22,16 @@ const double t_end = 40.0;
 const double steps = 1001;
 const double dt = (t_end - t_start) / (steps - 1);
 
+// Manual integration code data types
+
 struct State {
     double th1;
     double w1;
     double th2;
     double w2;
 };
-struct LStates {
+
+struct LStates { // L for lyapunov
     struct State l_s1 {1.0, 0.0, 0.0, 0.0};
     struct State l_s2 {0.0, 1.0, 0.0, 0.0};
     struct State l_s3 {0.0, 0.0, 1.0, 0.0};
@@ -38,6 +42,11 @@ struct LStates {
     double log_sum4 = 0;
 };
 
+// Boost integration data types
+using boost_state = std::vector<double>;
+const int N_LYAP = 4;
+
+// Helpers
 // Calculate derivatives (Equations of motion)
 inline State compute_derivatives(const State& s) {
     double delta = s.th1 - s.th2;
@@ -51,6 +60,7 @@ inline State compute_derivatives(const State& s) {
 
     return State{s.w1, alpha1, s.w2, alpha2};
 }
+
 
 // Helper function to add states
 inline State add_states(const State& a, const State& b, double scale = 1.0) {
@@ -91,10 +101,50 @@ inline State multiply_state(const State& a, double scale) {
     };
 }
 
+
+// Converts from state struct to boost vector format, derives then converts back 
+inline void boost_compute_derivatives(const boost_state &x, boost_state &dxdt) {
+    State current = {x[0], x[1], x[2], x[3]};
+    State current_derived = compute_derivatives(current);
+
+    dxdt[0] = current_derived.th1;
+    dxdt[1] = current_derived.w1;
+    dxdt[2] = current_derived.th2;
+    dxdt[3] = current_derived.w2;
+
+
+}
+
 inline State compute_sensitivity(const State& real, const State& fake, const double epsilon = 1e-6) {
     return multiply_state(subtract_states(compute_derivatives(add_states(real, fake, epsilon)), compute_derivatives(real)), 1/epsilon);
 }
 
+// Calculates Lyapunov System for Boost
+inline void boost_lyap_sys(const boost_state &x, boost_state &dxdt, const double t) {
+    State real = {x[0], x[1], x[2], x[3]};
+    State d_real = compute_derivatives(real);
+
+    dxdt[0] = d_real.th1;
+    dxdt[1] = d_real.w1;
+    dxdt[2] = d_real.th2;
+    dxdt[3] = d_real.w2;
+
+
+    for (int k = 0; k < N_LYAP; ++k) {
+        int offset = 4 + (k * 4);
+        
+        State fake_vec = {x[offset], x[offset + 1], x[offset + 2], x[offset + 3]};
+
+        State d_fake = compute_sensitivity(real, fake_vec);
+
+        dxdt[offset] = d_fake.th1;
+        dxdt[offset+1] = d_fake.w1;
+        dxdt[offset+2] = d_fake.th2;
+        dxdt[offset+3] = d_fake.w2;
+    }
+
+    
+}
 // Lyapunov Exponent
 inline LStates fake_derivatives(const State& real, const LStates& fake) {
     return {
@@ -149,7 +199,29 @@ inline void gram_shmidt_shuffle(LStates& fake) {
     fake.l_s4 = multiply_state(fake.l_s4, 1.0/mag4);
 }
 
-inline LStates rk4_lyanpunov_step(const LStates& fake, const State& current, double step_size) {
+inline std::vector<double> boost_gram_schmidt(boost_state &x) {
+    LStates ghosts;
+
+    ghosts.l_s1 = {x[4],  x[5],  x[6],  x[7]};
+    ghosts.l_s2 = {x[8],  x[9],  x[10], x[11]};
+    ghosts.l_s3 = {x[12], x[13], x[14], x[15]};
+    ghosts.l_s4 = {x[16], x[17], x[18], x[19]};
+
+    ghosts.log_sum1 = 0; ghosts.log_sum2 = 0; ghosts.log_sum3 = 0; ghosts.log_sum4 = 0;
+
+    gram_shmidt_shuffle(ghosts);
+    
+    x[4]  = ghosts.l_s1.th1; x[5]  = ghosts.l_s1.w1; x[6]  = ghosts.l_s1.th2; x[7]  = ghosts.l_s1.w2;
+    x[8]  = ghosts.l_s2.th1; x[9]  = ghosts.l_s2.w1; x[10] = ghosts.l_s2.th2; x[11] = ghosts.l_s2.w2;
+    x[12] = ghosts.l_s3.th1; x[13] = ghosts.l_s3.w1; x[14] = ghosts.l_s3.th2; x[15] = ghosts.l_s3.w2;
+    x[16] = ghosts.l_s4.th1; x[17] = ghosts.l_s4.w1; x[18] = ghosts.l_s4.th2; x[19] = ghosts.l_s4.w2;
+
+
+    return {ghosts.log_sum1, ghosts.log_sum2, ghosts.log_sum3, ghosts.log_sum4};
+}
+
+inline LStates rk4_lyapunov_step(const LStates& fake, const State& current, double step_size) {
+
     State rk1 = compute_derivatives(current);
     State rmid1 = add_states(current, rk1, step_size / 2.0);
     State rk2 = compute_derivatives(rmid1);
@@ -202,8 +274,7 @@ inline State rk4_step(const State& current, double step_size) {
     return next;
 }
 
-inline void run_simulation(const std::string& filename, bool verbose = true) {
-    State state = {1.0, -3.0, -1.0, 5.0};
+inline void run_naive_rk4_simulation(const std::string& filename, bool verbose = true, State state = {1.0, -3.0, -1.0, 5.0}) {
     LStates ghosts;
 
     std::ofstream file(filename);
@@ -216,12 +287,12 @@ inline void run_simulation(const std::string& filename, bool verbose = true) {
 
     double t = t_start;
     
-    if (verbose) std::cout << "Simulating fixed step size double pendulum..." << std::endl;
+    if (verbose) std::cout << "Simulating fixed step size Runge-Kutta 4..." << std::endl;
 
     for (int i = 0; i <= steps; ++i) {
         // Write to file
         file << t << "," << state.th1 << "," << state.w1 << "," << state.th2 << "," << state.w2 << "," << ghosts.log_sum1 << "," << ghosts.log_sum2 << "," << ghosts.log_sum3 << "," << ghosts.log_sum4 << "\n";
-        ghosts = rk4_lyanpunov_step(ghosts, state, dt);
+        ghosts = rk4_lyapunov_step(ghosts, state, dt);
         state = rk4_step(state, dt);
         gram_shmidt_shuffle(ghosts);
         t += dt;
@@ -231,23 +302,23 @@ inline void run_simulation(const std::string& filename, bool verbose = true) {
 
     if (verbose) std::cout << "Simulation complete. Data saved to " << filename << std::endl;
 
-    // Adaptive step size
-    std::string filename1 = "adaptive_step_size_" + filename;
+};
 
-    if (verbose) std::cout << "Simulating adaptive step size..." << std::endl;
+inline void run_adaptive_rk4_simulation(const std::string& filename, bool verbose = true, State state = {1.0, -3.0, -1.0, 5.0}) {
+    // Init cond
+    LStates ghosts;
 
-    file.open(filename1);
+    if (verbose) std::cout << "Simulating adaptive step size Runge-Kutta 4..." << std::endl;
+
+    std::ofstream file(filename);
     if (!file.is_open()) {
-        if (verbose) std::cerr << "Error: Could not open file " << filename1 << std::endl;
+        if (verbose) std::cerr << "Error: Could not open file" << filename << std::endl;
         return;
-    }
+    };
 
     file << "t,th1,w1,th2,w2,l1,l2,l3,l4\n";
-    // Reset init cond
-    LStates ghosts1;
-    ghosts = ghosts1;
-    state = {1.0, -3.0, -1.0, 5.0};
-    t = t_start;
+    
+    double t = t_start;
     double step_size = dt;
     double error_tolerance = 1e-6;
     double error;
@@ -278,7 +349,7 @@ inline void run_simulation(const std::string& filename, bool verbose = true) {
             step_size *= 0.5;
         } else {
             t += step_size;
-            ghosts = rk4_lyanpunov_step(ghosts, state, step_size);
+            ghosts = rk4_lyapunov_step(ghosts, state, step_size);
             state = partial_step;
             file << t << "," << state.th1 << "," << state.w1 << "," << state.th2 << "," << state.w2 << "," << ghosts.log_sum1 << "," << ghosts.log_sum2 << "," << ghosts.log_sum3 << "," << ghosts.log_sum4 << "\n";
             gram_shmidt_shuffle(ghosts);
@@ -287,7 +358,60 @@ inline void run_simulation(const std::string& filename, bool verbose = true) {
     }
 
     file.close();
-    if (verbose) std::cout << "Adaptive simulation complete. Data saved to " << filename1 << std::endl;
+    if (verbose) std::cout << "Adaptive simulation complete. Data saved to " << filename << std::endl;
 }
+
+inline void run_boost_rkd5_simulation(const std::string& filename, bool verbose = true, boost_state state = {1.0, -3.0, -1.0, 5.0}) {
+    using namespace boost::numeric::odeint;
+    
+    boost_state x(20, 0.0);
+
+    x[0] = state[0]; x[1] = state[1]; x[2] = state[2], x[3] = state[3];
+
+    x[4] = 1.0; x[9] = 1.0; x[14] = 1.0; x[19] = 1.0;
+
+
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        if (verbose) std::cerr << "Error: Could not open file" << filename << std::endl;
+        return;
+    };
+    
+    file << "t,th1,w1,th2,w2,l1,l2,l3,l4\n";
+
+    std::vector<double> lyap_sums = {0.0,0.0,0.0,0.0};
+
+    if (verbose) std::cout << "Simulating with Boost Runge-Kutta-Dopri5" << std::endl;
+
+    double absolute_error = 1e-6;
+    double relative_error = 1e-6;
+
+    auto stepper = make_controlled(absolute_error, relative_error, runge_kutta_dopri5<boost_state>());
+    
+    double t = t_start;
+    double normalization_interval = dt; 
+    while (t < t_end) {
+        file << t << "," << x[0] << "," << x[1] << "," << x[2] << "," << x[3] << "," << lyap_sums[0] << "," << lyap_sums[1] << "," << lyap_sums[2] << "," << lyap_sums[3] << "\n";
+        
+        size_t steps_taken = integrate_adaptive(
+            stepper,
+            boost_lyap_sys,
+            x,
+            t,
+            t + normalization_interval,
+            normalization_interval / 10.0
+        );
+
+        t += normalization_interval;
+
+        std::vector<double> step_logs = boost_gram_schmidt(x);
+
+        for(int i=0; i<4; i++) lyap_sums[i] += step_logs[i];
+    }
+    file.close();
+
+    if (verbose) std::cout << "Boost simulation complete. Saved to: " << filename << std::endl;
+}
+
 
 #endif

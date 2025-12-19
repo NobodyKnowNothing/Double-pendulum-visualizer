@@ -36,6 +36,7 @@
             // Clear old data so Python knows to wait for the new simulation
             delete window.cppData;
             delete window.cppDataAdaptive;
+            delete window.cppDataBoost;
 
             if (!module) {
                 module = await createCppSolver();
@@ -60,10 +61,12 @@
             }
             const csvContent = module.FS.readFile('pendulum.csv', { encoding: 'utf8' });
             const csvAdaptiveContent = module.FS.readFile('adaptive_step_size_pendulum.csv', { encoding: 'utf8' });
+            const csvBoostContent = module.FS.readFile('boost_pendulum.csv', { encoding: 'utf8' });
 
             // 4. Send this data to PyScript's Python environment
             window.cppData = csvContent;
             window.cppDataAdaptive = csvAdaptiveContent;
+            window.cppDataBoost = csvBoostContent;
 
             status.innerText = "Status: C++ Done. Solving Python Equations...";
         }

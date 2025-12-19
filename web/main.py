@@ -38,7 +38,7 @@ async def main():
     t_eval = np.linspace(0, t_end_val, 1001)
 
     # --- Load C++ Data ---
-    while not hasattr(js, 'cppData') or not hasattr(js, 'cppDataAdaptive'):
+    while not hasattr(js, 'cppData') or not hasattr(js, 'cppDataAdaptive') or not hasattr(js, 'cppDataBoost'):
         await asyncio.sleep(0.1)
 
     js.document.getElementById("status").innerText = "Status: Processing Data..."
@@ -91,6 +91,27 @@ async def main():
     y1_cpp_a = -l1_val * np.cos(th1_cpp_a)
     x2_cpp_a = x1_cpp_a + l2_val * np.sin(th2_cpp_a)
     y2_cpp_a = y1_cpp_a - l2_val * np.cos(th2_cpp_a)
+    
+    # --- Load Boost C++ Data ---
+    data_cpp_b = np.genfromtxt(io.StringIO(js.cppDataBoost), delimiter=',', skip_header=1)
+    t_raw_b = data_cpp_b[:, 0]
+    
+    # Interpolate Boost data to match the Python/Fixed-C++ time grid (t_eval)
+    th1_cpp_b = np.interp(t_eval, t_raw_b, data_cpp_b[:, 1])
+    th2_cpp_b = np.interp(t_eval, t_raw_b, data_cpp_b[:, 3])
+    w1_cpp_b = np.interp(t_eval, t_raw_b, data_cpp_b[:, 2])
+    w2_cpp_b = np.interp(t_eval, t_raw_b, data_cpp_b[:, 4])
+    # Interpolate Lyapunov data for Boost C++
+    l1_cpp_b_raw = np.interp(t_eval, t_raw_b, data_cpp_b[:, 5])
+    
+    t_eval_safe = np.where(t_eval > 0, t_eval, 1e-10)
+    lyap1_cpp_b = l1_cpp_b_raw / t_eval_safe
+
+    # Calculate Cartesian coordinates
+    x1_cpp_b = l1_val * np.sin(th1_cpp_b)
+    y1_cpp_b = -l1_val * np.cos(th1_cpp_b)
+    x2_cpp_b = x1_cpp_b + l2_val * np.sin(th2_cpp_b)
+    y2_cpp_b = y1_cpp_b - l2_val * np.cos(th2_cpp_b)
 
     # --- Setup Python Simulation ---
     js.document.getElementById("status").innerText = "Status: Solving Python ODE..."
@@ -205,6 +226,7 @@ async def main():
     energy_cpp = get_energy(th1_cpp, w1_cpp, th2_cpp, w2_cpp, _m1, _m2, l1_val, l2_val, _g)
     energy_py = get_energy(the1_py, w1_py, the2_py, w2_py, _m1, _m2, l1_val, l2_val, _g)
     energy_cpp_a = get_energy(th1_cpp_a, w1_cpp_a, th2_cpp_a, w2_cpp_a, _m1, _m2, l1_val, l2_val, _g)
+    energy_cpp_b = get_energy(th1_cpp_b, w1_cpp_b, th2_cpp_b, w2_cpp_b, _m1, _m2, l1_val, l2_val, _g)
 
     # --- Visualization ---
     js.document.getElementById("status").innerText = "Status: Starting Live Animation..."
@@ -237,7 +259,7 @@ async def main():
     ax[2].yaxis.label.set_color('white')
     ax[2].set_xlim(0, 40)
     # Set y-limits based on all Lyapunov data
-    lyap_all = np.concatenate([lyap1_cpp[1:], lyap1_cpp_a[1:], lyap1_py[1:]])
+    lyap_all = np.concatenate([lyap1_cpp[1:], lyap1_cpp_a[1:], lyap1_py[1:], lyap1_cpp_b[1:]])
     y_min = max(np.min(lyap_all), -10)
     y_max = min(np.max(lyap_all), 50)
     ax[2].set_ylim(y_min - 0.5, y_max + 1)
@@ -253,22 +275,26 @@ async def main():
     ln_cpp, = ax[0].plot([], [], 'ro-', lw=3, markersize=8, label='RK4 Rigid Step Size in C++')
     ln_py, = ax[0].plot([], [], 'c.--', lw=2, markersize=6, alpha=0.7, label='Adaptive-Step LSODA using SciPy in Python')
     ln_cpp_a, = ax[0].plot([], [], 'm-', lw=2, label='RK4 Adaptive Step Size in C++')
+    ln_cpp_b, = ax[0].plot([], [], 'g-', lw=2, label='Boost RKDP5 in C++')
     
     trace_cpp, = ax[0].plot([], [], 'y-', lw=1, alpha=0.5)
     trace_py, = ax[0].plot([], [], 'b-', lw=1, alpha=0.5)
     trace_cpp_a, = ax[0].plot([], [], 'm-', lw=1, alpha=0.3)
+    trace_cpp_b, = ax[0].plot([], [], 'g-', lw=1, alpha=0.3)
     ax[0].legend(loc='upper right', facecolor='black', labelcolor='white', fontsize=6)
     
     # Energy lines
     en_line_cpp, = ax[1].plot([], [], 'r-', label='RK4 (C++)')
     en_line_py, = ax[1].plot([], [], 'c--', label='LSODA (Python)')
     en_line_cpp_a, = ax[1].plot([], [], 'm-', label='Adaptive RK4 (C++)')
+    en_line_cpp_b, = ax[1].plot([], [], 'g-', label='Boost RKDP5 (C++)')
     ax[1].legend(facecolor='black', labelcolor='white', fontsize=7)
 
     # Lyapunov lines
     lyap_line_cpp, = ax[2].plot([], [], 'r-', label='RK4 (C++)')
     lyap_line_py, = ax[2].plot([], [], 'c--', label='LSODA (Python)')
     lyap_line_cpp_a, = ax[2].plot([], [], 'm-', label='Adaptive RK4 (C++)')
+    lyap_line_cpp_b, = ax[2].plot([], [], 'g-', label='Boost RKDP5 (C++)')
     ax[2].legend(facecolor='black', labelcolor='white', fontsize=7)
 
     # Animation Logic
@@ -300,16 +326,22 @@ async def main():
             # Adaptive Update
             ln_cpp_a.set_data([0, x1_cpp_a[i], x2_cpp_a[i]], [0, y1_cpp_a[i], y2_cpp_a[i]])
             trace_cpp_a.set_data(x2_cpp_a[max(0, i-50):i], y2_cpp_a[max(0, i-50):i])
+            
+            # Boost Update
+            ln_cpp_b.set_data([0, x1_cpp_b[i], x2_cpp_b[i]], [0, y1_cpp_b[i], y2_cpp_b[i]])
+            trace_cpp_b.set_data(x2_cpp_b[max(0, i-50):i], y2_cpp_b[max(0, i-50):i])
 
             # Energy Plot
             en_line_cpp.set_data(t_cpp[:i], energy_cpp[:i])
             en_line_py.set_data(t_eval[:i], energy_py[:i])
             en_line_cpp_a.set_data(t_eval[:i], energy_cpp_a[:i])
+            en_line_cpp_b.set_data(t_eval[:i], energy_cpp_b[:i])
 
             # Lyapunov Plot (show all including initial noise)
             lyap_line_cpp.set_data(t_cpp[1:i], lyap1_cpp[1:i])
             lyap_line_py.set_data(t_eval[1:i], lyap1_py[1:i])
             lyap_line_cpp_a.set_data(t_eval[1:i], lyap1_cpp_a[1:i])
+            lyap_line_cpp_b.set_data(t_eval[1:i], lyap1_cpp_b[1:i])
 
             # Display the updated figure
             display(fig, target="plot-div", append=False)

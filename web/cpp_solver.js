@@ -799,6 +799,75 @@ async function createWasm() {
 
   
 
+  class ExceptionInfo {
+      // excPtr - Thrown object pointer to wrap. Metadata pointer is calculated from it.
+      constructor(excPtr) {
+        this.excPtr = excPtr;
+        this.ptr = excPtr - 24;
+      }
+  
+      set_type(type) {
+        HEAPU32[(((this.ptr)+(4))>>2)] = type;
+      }
+  
+      get_type() {
+        return HEAPU32[(((this.ptr)+(4))>>2)];
+      }
+  
+      set_destructor(destructor) {
+        HEAPU32[(((this.ptr)+(8))>>2)] = destructor;
+      }
+  
+      get_destructor() {
+        return HEAPU32[(((this.ptr)+(8))>>2)];
+      }
+  
+      set_caught(caught) {
+        caught = caught ? 1 : 0;
+        HEAP8[(this.ptr)+(12)] = caught;
+      }
+  
+      get_caught() {
+        return HEAP8[(this.ptr)+(12)] != 0;
+      }
+  
+      set_rethrown(rethrown) {
+        rethrown = rethrown ? 1 : 0;
+        HEAP8[(this.ptr)+(13)] = rethrown;
+      }
+  
+      get_rethrown() {
+        return HEAP8[(this.ptr)+(13)] != 0;
+      }
+  
+      // Initialize native structure fields. Should be called once after allocated.
+      init(type, destructor) {
+        this.set_adjusted_ptr(0);
+        this.set_type(type);
+        this.set_destructor(destructor);
+      }
+  
+      set_adjusted_ptr(adjustedPtr) {
+        HEAPU32[(((this.ptr)+(16))>>2)] = adjustedPtr;
+      }
+  
+      get_adjusted_ptr() {
+        return HEAPU32[(((this.ptr)+(16))>>2)];
+      }
+    }
+  
+  var exceptionLast = 0;
+  
+  var uncaughtExceptionCount = 0;
+  var ___cxa_throw = (ptr, type, destructor) => {
+      var info = new ExceptionInfo(ptr);
+      // Initialize ExceptionInfo content after it was allocated in __cxa_allocate_exception.
+      info.init(type, destructor);
+      exceptionLast = ptr;
+      uncaughtExceptionCount++;
+      assert(false, 'Exception thrown, but exception catching is not enabled. Compile with -sNO_DISABLE_EXCEPTION_CATCHING or -sEXCEPTION_CATCHING_ALLOWED=[..] to catch.');
+    };
+
   var syscallGetVarargI = () => {
       assert(SYSCALLS.varargs != undefined);
       // the `+` prepended here is necessary to convince the JSCompiler that varargs is indeed a number.
@@ -4221,7 +4290,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'makePromise',
   'idsToPromises',
   'makePromiseCallback',
-  'ExceptionInfo',
   'findMatchingCatch',
   'Browser_asyncPrepareDataCounter',
   'isLeapYear',
@@ -4349,6 +4417,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'uncaughtExceptionCount',
   'exceptionLast',
   'exceptionCaught',
+  'ExceptionInfo',
   'Browser',
   'requestFullscreen',
   'requestFullScreen',
@@ -4520,10 +4589,10 @@ function checkIncomingModuleAPI() {
 var _main = Module['_main'] = makeInvalidEarlyAccess('_main');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _strerror = makeInvalidEarlyAccess('_strerror');
+var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
+var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
-var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
-var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
@@ -4535,10 +4604,10 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['main'] != 'undefined', 'missing Wasm export: main');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
   assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
+  assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
+  assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
-  assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
-  assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
@@ -4547,10 +4616,10 @@ function assignWasmExports(wasmExports) {
   _main = Module['_main'] = createExportWrapper('main', 2);
   _fflush = createExportWrapper('fflush', 1);
   _strerror = createExportWrapper('strerror', 1);
+  _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
+  _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
-  _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
-  _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
@@ -4559,6 +4628,8 @@ function assignWasmExports(wasmExports) {
 }
 
 var wasmImports = {
+  /** @export */
+  __cxa_throw: ___cxa_throw,
   /** @export */
   __syscall_fcntl64: ___syscall_fcntl64,
   /** @export */
