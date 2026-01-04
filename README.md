@@ -1,6 +1,6 @@
 # Double Pendulum Visualizer
 
-This project simulates the chaotic motion of a double pendulum using both Python and C++. It demonstrates the performance difference between a purely Python-based solver and two kinds of C++ Runge-Kutta solvers compiled to WebAssembly (WASM), visualized in the browser.
+This project simulates the chaotic motion of a double pendulum using both Python and C++. It demonstrates the performance difference between a purely Python-based solver and two kinds of C++ Runge-Kutta solvers compiled to WebAssembly (WASM), visualized in the browser. Performance is visualized with a Total energy plot and a lyapunov exponent plot both over time.
 
 ## Features
 
