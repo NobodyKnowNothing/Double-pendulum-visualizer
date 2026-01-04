@@ -1,3 +1,14 @@
+"""
+Double Pendulum Simulation (Python Desktop Version)
+
+This script simulates a double pendulum using the Lagrangian mechanics formulation.
+It derives the equations of motion using SymPy, solves them numerically using SciPy's odeint,
+and visualizes the result using Matplotlib.
+
+Usage:
+    Run this script directly to view the animation:
+    $ python src/python/main.py
+"""
 import numpy as np
 import sympy as smp
 from scipy.integrate import odeint

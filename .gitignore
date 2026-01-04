@@ -1,13 +1,26 @@
-venv/
+# Python
 __pycache__/
 *.pyc
+venv/
 
-# C++ compiled files
+# C++ / Build Artifacts
 *.exe
 *.o
 *.out
+*.obj
 
-# Data files (artifacts)
-pendulum.csv
+# Web / WASM Artifacts caused by local testing (don't ignore source committed ones if any, but usually re-generated)
+# We keep the committed wasm/js in web/ for the demo to work without building.
+# web/cpp_solver.js
+# web/cpp_solver.wasm
+
+# Data / Generated Files
+*.csv
 *.gif
-emsdk/
+assets/*.gif
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

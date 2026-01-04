@@ -1,3 +1,11 @@
+/**
+ * @file main_web.cpp
+ * @brief WebAssembly Entry Point
+ *
+ * This file serves as the main entry point for the Emscripten-compiled WebAssembly module.
+ * It exposes the simulation runners to JavaScript, allowing the browser to execute
+ * the high-performance C++ double pendulum solvers.
+ */
 #include "simulation.hpp"
 #include <emscripten.h>
 
